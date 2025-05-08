@@ -1,7 +1,9 @@
 import os
+import pickle
 from typing import Tuple
 
 import numpy as np
+import torch
 from assignment_1_code.datasets.dataset import ClassificationDataset, Subset
 
 
@@ -105,7 +107,8 @@ class CIFAR10Dataset(ClassificationDataset):
         if self.transform:
             image = self.transform(image)
 
-        return image, label
+        # FIX: make sure label is torch.long
+        return image, torch.tensor(label, dtype=torch.long)
 
     def num_classes(self) -> int:
         """

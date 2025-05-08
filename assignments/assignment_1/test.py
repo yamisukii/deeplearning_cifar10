@@ -1,15 +1,16 @@
-## Feel free to change the imports according to your implementation and needs
+# Feel free to change the imports according to your implementation and needs
 import argparse
 import os
+
 import torch
 import torchvision.transforms.v2 as v2
-import os
-
-from torchvision.models import resnet18  # change to the model you want to test
-from assignment_1_code.models.class_model import DeepClassifier
-from assignment_1_code.metrics import Accuracy
-from assignment_1_code.datasets.cifar10 import CIFAR10Dataset
 from assignment_1_code.datasets.dataset import Subset
+from assignment_1_code.metrics import Accuracy
+from assignment_1_code.models.class_model import DeepClassifier
+from torchvision.models import resnet18  # change to the model you want to test
+
+from dlvc_ss25.assignments.assignment_1.assignment_1_code.datasets.cifar10 import \
+    CIFAR10Dataset
 
 
 def test(args):
@@ -18,7 +19,8 @@ def test(args):
         [
             v2.ToImage(),
             v2.ToDtype(torch.float32, scale=True),
-            v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            v2.Normalize(mean=[0.485, 0.456, 0.406],
+                         std=[0.229, 0.224, 0.225]),
         ]
     )
 
@@ -36,13 +38,13 @@ def test(args):
 
     test_metric = Accuracy(classes=test_data.classes)
 
-    ### Below implement testing loop and print final loss
-    ### and metrics to terminal after testing is finished
+    # Below implement testing loop and print final loss
+    # and metrics to terminal after testing is finished
     # ...
 
 
 if __name__ == "__main__":
-    ## Feel free to change this part - you do not have to use this argparse and gpu handling
+    # Feel free to change this part - you do not have to use this argparse and gpu handling
     args = argparse.ArgumentParser(description="Training")
     args.add_argument(
         "-d", "--gpu_id", default="5", type=str, help="index of which GPU to use"

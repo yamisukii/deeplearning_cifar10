@@ -1,12 +1,12 @@
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torchvision
 import torchvision.transforms.v2 as v2
-import matplotlib.pyplot as plt
-import numpy as np
-
-
-from assignment_1_code.datasets.cifar10 import CIFAR10Dataset
 from assignment_1_code.datasets.dataset import Subset
+
+from dlvc_ss25.assignments.assignment_1.assignment_1_code.datasets.cifar10 import \
+    CIFAR10Dataset
 
 
 def imshow(img):
@@ -30,10 +30,11 @@ if __name__ == "__main__":
         "truck",
     )
 
-    transform = v2.Compose([v2.ToImage(), v2.ToDtype(torch.float32, scale=True)])
+    transform = v2.Compose(
+        [v2.ToImage(), v2.ToDtype(torch.float32, scale=True)])
 
     train_data = CIFAR10Dataset(
-        fdir="assignment_1_code/datasets/cifar-10-batches-py",
+        fdir="dlvc_ss25/assignments/assignment_1/cifar-10-batches-py",
         subset=Subset.TRAINING,
         transform=transform,
     )

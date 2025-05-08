@@ -1,0 +1,18 @@
+Traceback (most recent call last):
+  File "C:\Users\1\Documents\Uni\Master\DeepLearningForViz\Assignments\ass1\dlvc_ss25\assignments\assignment_1\train.py", line 103, in <module>
+    train(args)
+  File "C:\Users\1\Documents\Uni\Master\DeepLearningForViz\Assignments\ass1\dlvc_ss25\assignments\assignment_1\train.py", line 87, in train
+    trainer.train()
+  File "C:\Users\1\Documents\Uni\Master\DeepLearningForViz\Assignments\ass1\dlvc_ss25\assignments\assignment_1\assignment_1_code\trainer.py", line 207, in train
+    train_loss, train_acc, train_pc_acc = self._train_epoch(epoch)
+  File "C:\Users\1\Documents\Uni\Master\DeepLearningForViz\Assignments\ass1\dlvc_ss25\assignments\assignment_1\assignment_1_code\trainer.py", line 135, in _train_epoch
+    loss = self.loss_fn(outputs, targets)
+  File "C:\Users\1\Documents\Uni\Master\DeepLearningForViz\Assignments\ass1\venv\lib\site-packages\torch\nn\modules\module.py", line 1511, in _wrapped_call_impl
+    return self._call_impl(*args, **kwargs)
+  File "C:\Users\1\Documents\Uni\Master\DeepLearningForViz\Assignments\ass1\venv\lib\site-packages\torch\nn\modules\module.py", line 1520, in _call_impl
+    return forward_call(*args, **kwargs)
+  File "C:\Users\1\Documents\Uni\Master\DeepLearningForViz\Assignments\ass1\venv\lib\site-packages\torch\nn\modules\loss.py", line 1179, in forward
+    return F.cross_entropy(input, target, weight=self.weight,
+  File "C:\Users\1\Documents\Uni\Master\DeepLearningForViz\Assignments\ass1\venv\lib\site-packages\torch\nn\functional.py", line 3059, in cross_entropy
+    return torch._C._nn.cross_entropy_loss(input, target, weight, _Reduction.get_enum(reduction), ignore_index, label_smoothing)
+RuntimeError: expected scalar type Long but found Int
