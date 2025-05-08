@@ -15,7 +15,7 @@ To set up your development environment, follow the steps below:
 
 ```bash
 git clone https://github.com/yamisukii/deeplearning_cifar10.git
-cd dlvc-ss2025
+cd deeplearning_cifar10
 ```
 
 ### 2. Create a Virtual Environment
