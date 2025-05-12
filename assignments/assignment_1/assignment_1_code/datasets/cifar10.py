@@ -100,14 +100,16 @@ class CIFAR10Dataset(ClassificationDataset):
         """
         if idx < 0 or idx >= len(self.labels):
             raise IndexError("Index out of bounds")
-
         image = self.images[idx]
         label = self.labels[idx]
+
+        # Convert NumPy array to PyTorch tensor
+        image = torch.from_numpy(image).permute(
+            2, 0, 1)
 
         if self.transform:
             image = self.transform(image)
 
-        # FIX: make sure label is torch.long
         return image, torch.tensor(label, dtype=torch.long)
 
     def num_classes(self) -> int:

@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 import torch
+import torch.nn as nn
 import torchvision.transforms.v2 as v2
 from assignment_1_code.datasets.cifar10 import CIFAR10Dataset
 from assignment_1_code.datasets.dataset import Subset
@@ -35,6 +36,10 @@ def test(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     net = resnet18(num_classes=len(test_data.classes))
+    net.fc = nn.Sequential(
+        nn.Dropout(p=0.5),                        # Must match training!
+        nn.Linear(net.fc.in_features, 10)
+    )
     model = DeepClassifier(net)
     model.load(args.path_to_trained_model)
     model.to(device)

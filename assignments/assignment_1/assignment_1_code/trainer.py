@@ -58,6 +58,7 @@ class ImgClassificationTrainer(BaseTrainer):
         training_save_dir: Path,
         batch_size: int = 4,
         val_frequency: int = 5,
+        run_name: str = None
     ) -> None:
         """
         Args and Kwargs:
@@ -110,7 +111,7 @@ class ImgClassificationTrainer(BaseTrainer):
         self.logger = WandBLogger(
             enabled=True,
             model=model,
-            run_name="resnet18_run"  # optional: customize name
+            run_name=run_name if run_name is not None else "test_run"
         )
 
         self.best_val_pc_acc = 0.0

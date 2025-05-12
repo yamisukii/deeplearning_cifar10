@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 import torch
+import torch.nn as nn
 import torchvision.transforms.v2 as v2
 from assignment_1_code.datasets.cifar10 import CIFAR10Dataset
 from assignment_1_code.datasets.dataset import Subset
@@ -21,6 +22,7 @@ def train(args):
     # but do not have to be used if you want to do it differently
     # For device handling you can take a look at pytorch documentation
 
+    # Default
     train_transform = v2.Compose(
         [
             v2.ToImage(),
@@ -29,6 +31,15 @@ def train(args):
                          std=[0.229, 0.224, 0.225]),
         ]
     )
+
+    # Data Augmentation
+    # train_transform = v2.Compose([
+    #     v2.RandomHorizontalFlip(p=0.5),
+    #     v2.RandomCrop(size=(32, 32), padding=4),
+    #     v2.ToImage(),
+    #     v2.ToDtype(torch.float32, scale=True),
+    #     v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    # ])
 
     val_transform = v2.Compose(
         [
@@ -40,7 +51,7 @@ def train(args):
     )
 
     # Load datasets
-    data_dir = Path("assignments/assignment_1/cifar-10-batches-py")
+    data_dir = Path("dlvc_ss25/assignments/assignment_1/cifar-10-batches-py")
     train_data = CIFAR10Dataset(
         fdir=data_dir, subset=Subset.TRAINING, transform=train_transform)
     val_data = CIFAR10Dataset(
@@ -49,14 +60,27 @@ def train(args):
     # Device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Ensure output matches 10 CIFAR classes
+    # Default resnet Model
+    # net = resnet18(num_classes=len(train_data.classes))
+    # model = DeepClassifier(net)
+    # model.to(device)
+
+    # DropOut Resnet Model
     net = resnet18(num_classes=len(train_data.classes))
+    net.fc = nn.Sequential(
+        nn.Dropout(p=0.5),
+        nn.Linear(net.fc.in_features, 10)
+    )
     model = DeepClassifier(net)
     model.to(device)
 
     # Optimizer, loss, scheduler
-    optimizer = torch.optim.SGD(
-        model.parameters(), lr=0.01, momentum=0.9, weight_decay=1e-4)
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=0.001,
+        amsgrad=True
+    )
+
     loss_fn = torch.nn.CrossEntropyLoss()
     lr_scheduler = torch.optim.lr_scheduler.StepLR(
         optimizer, step_size=10, gamma=0.1)

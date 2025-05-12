@@ -1,6 +1,7 @@
 from typing import Dict
 
 import torch
+
 import wandb
 
 wandb.login(key="b19e3bab4d5cb7f5ac324d071632f424d4950ae0")
@@ -10,7 +11,7 @@ class WandBLogger:
 
     def __init__(self, enabled=True,
                  model: torch.nn.modules = None,
-                 run_name: str = None) -> None:
+                 run_name: str = "AdamDefault") -> None:
 
         self.enabled = enabled
 
