@@ -5,7 +5,7 @@ import torchvision.transforms.v2 as v2
 import os
 import matplotlib.pyplot as plt
 import numpy as np
-os.chdir(os.getcwd() + "change to your working directory if necessary")
+#os.chdir(os.getcwd() + "change to your working directory if necessary")
 
 
 from train import OxfordPetsCustom

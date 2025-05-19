@@ -11,9 +11,30 @@ from dlvc.dataset.oxfordpets import  OxfordPetsCustom
 from dlvc.metrics import SegMetrics
 from dlvc.trainer import ImgSemSegTrainer
 
-
+def pets_label_shift(mask: torch.Tensor) -> torch.Tensor:
+    """1,2,3→0,1,2   keep 255 intact; drop 1-channel dim."""
+    mask = mask.squeeze(0)
+    void = mask == 255
+    mask = mask - 1
+    mask[void] = 255
+    return mask
 
 def train(args):
+    mask_transform_pets = v2.Compose([
+        v2.ToImage(),
+        v2.ToDtype(torch.long, scale=False),
+        v2.Resize(size=(64, 64), interpolation=v2.InterpolationMode.NEAREST),
+        v2.Lambda(pets_label_shift),
+    ])
+
+    mask_transform_city = v2.Compose([
+        v2.ToImage(),
+        v2.ToDtype(torch.long, scale=False),
+        v2.Resize(size=(64, 64), interpolation=v2.InterpolationMode.NEAREST),
+        v2.Lambda(lambda t: t.squeeze(0)),
+    ])
+
+
 
     train_transform = v2.Compose([v2.ToImage(), 
                             v2.ToDtype(torch.float32, scale=True),
@@ -31,36 +52,48 @@ def train(args):
                             v2.ToDtype(torch.long, scale=False),
                             v2.Resize(size=(64,64), interpolation=v2.InterpolationMode.NEAREST)])
 
-    train_data = OxfordPetsCustom(root="path_to_dataset", 
+    train_data = OxfordPetsCustom(root="datasets", 
                             split="trainval",
                             target_types='segmentation', 
                             transform=train_transform,
-                            target_transform=train_transform2,
+                            target_transform=mask_transform_pets,
                             download=True)
 
-    val_data = OxfordPetsCustom(root="path_to_dataset", 
+    val_data = OxfordPetsCustom(root="datasets", 
                             split="test",
                             target_types='segmentation', 
                             transform=val_transform,
-                            target_transform=val_transform2,
+                            target_transform=mask_transform_pets,
                             download=True)
 
 
 
-    device = ...
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
 
-    model = DeepSegmenter(...)
-    optimizer = ...
-    loss_fn = ...
+    # 3 classes (pet, background, border); no pre-trained weights for the head
+    torch_model = fcn_resnet50(
+        num_classes=3,
+        weights=None,              # prediction head
+        weights_backbone=None      # encoder (set to a weight enum to pre-train)
+    )
+    model = DeepSegmenter(torch_model).to(device)
+
+    optimizer   = torch.optim.AdamW(model.parameters(), lr=1e-3, amsgrad=True)
+    loss_fn     = torch.nn.CrossEntropyLoss()          # no ignore_index needed
+    lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(
+        optimizer, gamma=0.98
+    )
+
+    train_metric = SegMetrics(classes=3)      
+    val_metric   = SegMetrics(classes=3)    
+    #train_metric = SegMetrics(classes=train_data.classes_seg)
+    #val_metric = SegMetrics(classes=val_data.classes_seg)
     
-    train_metric = SegMetrics(classes=train_data.classes_seg)
-    val_metric = SegMetrics(classes=val_data.classes_seg)
     val_frequency = 2
 
     model_save_dir = Path("saved_models")
     model_save_dir.mkdir(exist_ok=True)
-
-    lr_scheduler = ...
     
     trainer = ImgSemSegTrainer(model, 
                     optimizer,
@@ -90,7 +123,7 @@ if __name__ == "__main__":
         args = args.parse_args()
     os.environ['CUDA_VISIBLE_DEVICES'] = str(args.gpu_id)
     args.gpu_id = 0
-    args.num_epochs = 31
+    args.num_epochs = 2
 
 
     train(args)

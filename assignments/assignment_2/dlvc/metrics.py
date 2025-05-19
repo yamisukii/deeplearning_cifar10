@@ -31,7 +31,6 @@ class PerformanceMeasure(metaclass=ABCMeta):
 
         pass
 
-
 class SegMetrics(PerformanceMeasure):
     '''
     Mean Intersection over Union.
@@ -46,13 +45,16 @@ class SegMetrics(PerformanceMeasure):
         '''
         Resets the internal state.
         '''
-        ## TODO implement
-        pass
+        # create an empty confusion-matrix (C × C) on CPU
+        self._confmat = torch.zeros(
+            (self.classes, self.classes), dtype=torch.int64
+        )
 
-
-
-    def update(self, prediction: torch.Tensor, 
-               target: torch.Tensor) -> None:
+    def update(
+        self,
+        prediction: torch.Tensor,
+        target: torch.Tensor,
+    ) -> None:
         '''
         Update the measure by comparing predicted data with ground-truth target data.
         prediction must have shape (b,c,h,w) where b=batchsize, c=num_classes, h=height, w=width.
@@ -61,20 +63,39 @@ class SegMetrics(PerformanceMeasure):
         Make sure to not include pixels of value 255 in the calculation since those are to be ignored. 
         '''
 
-       ##TODO implement
-        pass
-   
+        if prediction.ndim != 4:
+            raise ValueError("prediction must be (b,c,h,w)")
+        if target.ndim != 3:
+            raise ValueError("target must be (b,h,w)")
+        b, c, h, w = prediction.shape
+        if c != self.classes:
+            raise ValueError(f"expected {self.classes} classes, got {c}")
+        if target.shape != (b, h, w):
+            raise ValueError("spatial dims of prediction/target mismatch")
+
+        pred_lbl = prediction.argmax(dim=1)  # (b,h,w)
+
+        mask = target != 255
+        pred_lbl = pred_lbl[mask].flatten()
+        tgt_lbl = target[mask].flatten()
+
+        if pred_lbl.numel() == 0:
+            return  
+
+
+        k = tgt_lbl * self.classes + pred_lbl          # encode pairs
+        cm = torch.bincount(
+            k, minlength=self.classes * self.classes
+        ).reshape(self.classes, self.classes)
+        self._confmat += cm.to(self._confmat.device)
 
     def __str__(self):
         '''
         Return a string representation of the performance, mean IoU.
         e.g. "mIou: 0.54"
         '''
-        ##TODO implement
-        pass
-          
+        return f"mIou: {self.mIoU():.2f}"
 
-    
     def mIoU(self) -> float:
         '''
         Compute and return the mean IoU as a float between 0 and 1.
@@ -82,10 +103,16 @@ class SegMetrics(PerformanceMeasure):
         If the denominator for IoU calculation for one of the classes is 0,
         use 0 as IoU for this class.
         '''
-        ##TODO implement
-        pass
 
+        if self._confmat.sum() == 0:
+            return 0.0
 
+        tp = torch.diag(self._confmat).float()
+        fp = self._confmat.sum(0).float() - tp
+        fn = self._confmat.sum(1).float() - tp
+        denom = tp + fp + fn
 
-
-
+        iou = torch.where(
+            denom > 0, tp / denom, torch.zeros_like(tp)
+        )
+        return iou.mean().item()

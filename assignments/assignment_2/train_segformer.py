@@ -34,21 +34,21 @@ def train(args):
                             v2.Resize(size=(64,64), interpolation=v2.InterpolationMode.NEAREST)])
 
     if args.dataset == "oxford":
-        train_data = OxfordPetsCustom(root="path_to_dataset", 
+        train_data = OxfordPetsCustom(root="datasets", 
                                 split="trainval",
                                 target_types='segmentation', 
                                 transform=train_transform,
                                 target_transform=train_transform2,
                                 download=True)
 
-        val_data = OxfordPetsCustom(root="path_to_dataset", 
+        val_data = OxfordPetsCustom(root="datasets", 
                                 split="test",
                                 target_types='segmentation', 
                                 transform=val_transform,
                                 target_transform=val_transform2,
                                 download=True)
     if args.dataset == "city":
-        train_data = CityscapesCustom(root="path_to_dataset", 
+        train_data = CityscapesCustom(root="datasets", 
                                 split="train",
                                 mode="fine",
                                 target_type='semantic', 
@@ -62,27 +62,47 @@ def train(args):
                                 target_transform=val_transform2)
 
 
-    device = ...
-
-    model = DeepSegmenter(...)
     # If you are in the fine-tuning phase:
     if args.dataset == 'oxford':
         ##TODO update the encoder weights of the model with the loaded weights of the pretrained model
         # e.g. load pretrained weights with: state_dict = torch.load("path to model", map_location='cpu')
         ...
         ##
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {device}")
+
+    segformer_core = SegFormer(num_classes=num_classes, variant="b0")
+    model = DeepSegmenter(segformer_core)      # wrapper matches your repo
+
+    if args.encoder_ckpt is not None:
+        state = torch.load(args.encoder_ckpt, map_location="cpu")
+        # DeepSegmenter exposes underlying SegFormer as .net
+        model.net.encoder.load_state_dict(state, strict=True)
+        print(f"Loaded encoder weights from {args.encoder_ckpt}")
+
+        if args.freeze_encoder:
+            model.net.encoder.requires_grad_(False)
+            print("Encoder frozen.")
+
     model.to(device)
-    optimizer = ...
-    loss_fn = ... # remember to ignore label value 255 when training with the Cityscapes datset
+
+    optim_params = filter(lambda p: p.requires_grad, model.parameters())
+    optimizer = torch.optim.AdamW(optim_params, lr=args.lr, amsgrad=True)
+
+    loss_kwargs = dict() if ignore_index is None else dict(ignore_index=ignore_index)
+    loss_fn = torch.nn.CrossEntropyLoss(**loss_kwargs)
+
+    lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.98)
+    model.to(device)
     
     train_metric = SegMetrics(classes=train_data.classes_seg)
     val_metric = SegMetrics(classes=val_data.classes_seg)
-    val_frequency = 2 # for 
+    val_frequency = 2 
 
     model_save_dir = Path("saved_models")
     model_save_dir.mkdir(exist_ok=True)
 
-    lr_scheduler = ...
     
     trainer = ImgSemSegTrainer(model, 
                     optimizer,
