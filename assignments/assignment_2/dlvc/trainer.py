@@ -184,7 +184,6 @@ class ImgSemSegTrainer(BaseTrainer):
             pbar = tqdm(self.val_loader,
                         desc=f"Val    Epoch {epoch_idx}", leave=False)
             for imgs, masks in pbar:
-                # move to device
                 imgs = imgs.to(self.device, non_blocking=True)
                 masks = masks.to(self.device, non_blocking=True)
 
@@ -226,7 +225,7 @@ class ImgSemSegTrainer(BaseTrainer):
             val_loss = float('nan')
             val_miou = float('nan')
 
-            # Run validation if needed
+            # Run validation
             if epoch % self.val_frequency == 0 or epoch == self.num_epochs:
                 val_loss, val_miou = self._val_epoch(epoch)
 
@@ -236,7 +235,6 @@ class ImgSemSegTrainer(BaseTrainer):
                     torch.save(self.model.state_dict(), best_path)
                     print(f"  → Saved new best model (mIoU {val_miou:.4f})")
 
-            # Log everything (train + possibly val)
             self.logger.log({
                 "epoch": epoch,
                 "train/loss": train_loss,
@@ -255,6 +253,5 @@ class ImgSemSegTrainer(BaseTrainer):
         self.logger.finish()
 
     def dispose(self) -> None:
-        """Free GPU memory, close loggers, etc."""
         del self.model
         torch.cuda.empty_cache()

@@ -14,7 +14,7 @@ from torchvision.models.segmentation import fcn_resnet50
 
 
 def pets_label_shift(mask: torch.Tensor) -> torch.Tensor:
-    """1,2,3→0,1,2   keep 255 intact; drop 1-channel dim."""
+    """1,2,3→0,1,2 """
     mask = mask.squeeze(0)
     void = mask == 255
     mask = mask - 1
@@ -72,7 +72,6 @@ def train(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    # 3 classes (pet, background, border); no pre-trained weights for the head
     torch_model = fcn_resnet50(
         num_classes=3,
         weights=None,
@@ -81,7 +80,7 @@ def train(args):
     model = DeepSegmenter(torch_model).to(device)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3, amsgrad=True)
-    loss_fn = torch.nn.CrossEntropyLoss()          # no ignore_index needed
+    loss_fn = torch.nn.CrossEntropyLoss()
     lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(
         optimizer, gamma=0.98
     )
