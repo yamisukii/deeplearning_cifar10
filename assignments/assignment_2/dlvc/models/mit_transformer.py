@@ -3,11 +3,13 @@
 #
 # This work is licensed under the NVIDIA Source Code License
 # ---------------------------------------------------------------
+import math
+from functools import partial
+
 import torch
 import torch.nn as nn
-from functools import partial
-import math
 from dlvc.models.segformer_utils import *
+
 
 class DWConv(nn.Module):
     def __init__(self, dim=768):
@@ -21,6 +23,7 @@ class DWConv(nn.Module):
         x = x.flatten(2).transpose(1, 2)
 
         return x
+
 
 class Mlp(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
@@ -59,6 +62,7 @@ class Mlp(nn.Module):
         x = self.drop(x)
         return x
 
+
 class Attention(nn.Module):
     def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., sr_ratio=1):
         super().__init__()
@@ -77,7 +81,8 @@ class Attention(nn.Module):
 
         self.sr_ratio = sr_ratio
         if sr_ratio > 1:
-            self.sr = nn.Conv2d(dim, dim, kernel_size=sr_ratio, stride=sr_ratio)
+            self.sr = nn.Conv2d(
+                dim, dim, kernel_size=sr_ratio, stride=sr_ratio)
             self.norm = nn.LayerNorm(dim)
 
         self.apply(self._init_weights)
@@ -99,19 +104,21 @@ class Attention(nn.Module):
 
     def forward(self, x, H, W):
         B, N, C = x.shape
-        q = self.q(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
+        q = self.q(x).reshape(B, N, self.num_heads, C //
+                              self.num_heads).permute(0, 2, 1, 3)
 
         if self.sr_ratio > 1:
             x_ = x.permute(0, 2, 1).reshape(B, C, H, W)
             x_ = self.sr(x_).reshape(B, C, -1).permute(0, 2, 1)
             x_ = self.norm(x_)
-            kv = self.kv(x_).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+            kv = self.kv(x_).reshape(B, -1, 2, self.num_heads,
+                                     C // self.num_heads).permute(2, 0, 3, 1, 4)
         else:
-            kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+            kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C //
+                                    self.num_heads).permute(2, 0, 3, 1, 4)
         k, v = kv[0], kv[1]
 
-
-        # This part needs speed up which is why 
+        # This part needs speed up which is why
         attn = (q @ k.transpose(-2, -1)) * self.scale
         attn = attn.softmax(dim=-1)
         attn = self.attn_drop(attn)
@@ -121,6 +128,7 @@ class Attention(nn.Module):
         x = self.proj_drop(x)
 
         return x
+
 
 class Block(nn.Module):
 
@@ -133,10 +141,12 @@ class Block(nn.Module):
             num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
             attn_drop=attn_drop, proj_drop=drop, sr_ratio=sr_ratio)
 
-        self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
+        self.drop_path = DropPath(
+            drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
+        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim,
+                       act_layer=act_layer, drop=drop)
 
         self.apply(self._init_weights)
 
@@ -156,15 +166,17 @@ class Block(nn.Module):
                 m.bias.data.zero_()
 
     def forward(self, x, H, W):
-        #TODO implement the forward pass of one Transformer block
-        # follow the instruction line by line
-        x1 = ...# apply self.norm1 to x
-        x1 = ...# apply self.attn to x1
+        # TODO implement the forward pass of one Transformer block
+        x1 = self.norm1(x)
+        x1 = self.attn(x1, H, W)
         x1 = x + self.drop_path(x1)
-        x2 = ...# apply self.norm2 to x1
-        x2 = ...# apply self.mlp to x2
+
+        x2 = self.norm2(x1)
+        x2 = self.mlp(x2, H, W)
         x2 = x1 + self.drop_path(x2)
+
         return x2
+
 
 class OverlapPatchEmbed(nn.Module):
     """ Image to Patch Embedding
@@ -172,14 +184,12 @@ class OverlapPatchEmbed(nn.Module):
 
     def __init__(self, img_size=224, patch_size=7, stride=4, in_chans=3, embed_dim=768):
         super().__init__()
-        
-        #TODO implement 
-        # compute the new H an W given the original image size and the patchsize 
-        # (we only look at quadratic patches meaning patch_size is same for H and W)
-        self.H, self.W = ...
-        # compute the number of patches given the new H and W
-        self.num_patches = ...
-        
+
+        self.H = math.ceil(img_size / stride)
+        self.W = self.H
+
+        self.num_patches = self.H * self.W
+
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=stride,
                               padding=(patch_size // 2, patch_size // 2))
         self.norm = nn.LayerNorm(embed_dim)
@@ -209,6 +219,7 @@ class OverlapPatchEmbed(nn.Module):
 
         return x, H, W
 
+
 class MixVisionTransformer(nn.Module):
     def __init__(self, img_size=64,  in_chans=3, num_classes=3, embed_dims=[64, 128, 256, 512],
                  num_heads=[1, 2, 4, 8], mlp_ratios=[4, 4, 4, 4], qkv_bias=False, qk_scale=None, drop_rate=0.,
@@ -229,11 +240,13 @@ class MixVisionTransformer(nn.Module):
                                               embed_dim=embed_dims[3])
 
         # transformer encoder
-        dpr = [x.item() for x in torch.linspace(0, drop_path_rate, sum(depths))]  # stochastic depth decay rule
+        dpr = [x.item() for x in torch.linspace(0, drop_path_rate,
+                                                sum(depths))]  # stochastic depth decay rule
         cur = 0
         self.block1 = nn.ModuleList([Block(
             dim=embed_dims[0], num_heads=num_heads[0], mlp_ratio=mlp_ratios[0], qkv_bias=qkv_bias, qk_scale=qk_scale,
-            drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
+            drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur +
+                                                                    i], norm_layer=norm_layer,
             sr_ratio=sr_ratios[0])
             for i in range(depths[0])])
         self.norm1 = norm_layer(embed_dims[0])
@@ -241,7 +254,8 @@ class MixVisionTransformer(nn.Module):
         cur += depths[0]
         self.block2 = nn.ModuleList([Block(
             dim=embed_dims[1], num_heads=num_heads[1], mlp_ratio=mlp_ratios[1], qkv_bias=qkv_bias, qk_scale=qk_scale,
-            drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
+            drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur +
+                                                                    i], norm_layer=norm_layer,
             sr_ratio=sr_ratios[1])
             for i in range(depths[1])])
         self.norm2 = norm_layer(embed_dims[1])
@@ -249,7 +263,8 @@ class MixVisionTransformer(nn.Module):
         cur += depths[1]
         self.block3 = nn.ModuleList([Block(
             dim=embed_dims[2], num_heads=num_heads[2], mlp_ratio=mlp_ratios[2], qkv_bias=qkv_bias, qk_scale=qk_scale,
-            drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
+            drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur +
+                                                                    i], norm_layer=norm_layer,
             sr_ratio=sr_ratios[2])
             for i in range(depths[2])])
         self.norm3 = norm_layer(embed_dims[2])
@@ -257,11 +272,11 @@ class MixVisionTransformer(nn.Module):
         cur += depths[2]
         self.block4 = nn.ModuleList([Block(
             dim=embed_dims[3], num_heads=num_heads[3], mlp_ratio=mlp_ratios[3], qkv_bias=qkv_bias, qk_scale=qk_scale,
-            drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + i], norm_layer=norm_layer,
+            drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur +
+                                                                    i], norm_layer=norm_layer,
             sr_ratio=sr_ratios[3])
             for i in range(depths[3])])
         self.norm4 = norm_layer(embed_dims[3])
-
 
         self.apply(self._init_weights)
 
@@ -279,8 +294,6 @@ class MixVisionTransformer(nn.Module):
             m.weight.data.normal_(0, math.sqrt(2.0 / fan_out))
             if m.bias is not None:
                 m.bias.data.zero_()
-
-
 
     def forward(self, x):
         B = x.shape[0]
@@ -319,13 +332,3 @@ class MixVisionTransformer(nn.Module):
         outs.append(x)
 
         return outs
-
-
-           
-
-
-
-
-
-
-

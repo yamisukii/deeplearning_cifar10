@@ -1,2 +1,6 @@
 # Ignore the entire Python virtual-environment folder
 .venv/
+.datasets/
+assignments/assignment_2/datasets/
+__pycache__/
+wandb/

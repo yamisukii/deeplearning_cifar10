@@ -4,17 +4,16 @@
 # This work is licensed under the NVIDIA Source Code License
 # ---------------------------------------------------------------
 
-import torch.nn as nn
 import torch
-
+import torch.nn as nn
 from dlvc.models.segformer_utils import *
-
 
 
 class MLP(nn.Module):
     """
     Linear Embedding
     """
+
     def __init__(self, input_dim=2048, embed_dim=768):
         super().__init__()
         self.proj = nn.Linear(input_dim, embed_dim)
@@ -29,6 +28,7 @@ class SegFormerHead(nn.Module):
     """
     SegFormer: Simple and Efficient Design for Semantic Segmentation with Transformers
     """
+
     def __init__(self, feature_strides, in_channels, in_index, decoder_params, num_classes, dropout_ratio=0.1):
         super(SegFormerHead, self).__init__()
         self.in_channels = in_channels
@@ -54,9 +54,11 @@ class SegFormerHead(nn.Module):
         self.linear_fuse_norm = nn.BatchNorm2d(embedding_dim)
         self.linear_fuse_act = nn.ReLU()
 
-        self.linear_pred = nn.Conv2d(embedding_dim, self.num_classes, kernel_size=1)
+        self.linear_pred = nn.Conv2d(
+            embedding_dim, self.num_classes, kernel_size=1)
+
     def _transform_inputs(self, inputs):
-        
+
         inputs = [inputs[i] for i in self.in_index]
         return inputs
 
@@ -67,19 +69,27 @@ class SegFormerHead(nn.Module):
         ############## MLP decoder on C1-C4 ###########
         n, _, h, w = c4.shape
 
-        _c4 = self.linear_c4(c4).permute(0,2,1).reshape(n, -1, c4.shape[2], c4.shape[3])
-        _c4 = resize(_c4, size=c1.size()[2:],mode='bilinear',align_corners=False)
+        _c4 = self.linear_c4(c4).permute(0, 2, 1).reshape(
+            n, -1, c4.shape[2], c4.shape[3])
+        _c4 = resize(_c4, size=c1.size()[2:],
+                     mode='bilinear', align_corners=False)
 
-        _c3 = self.linear_c3(c3).permute(0,2,1).reshape(n, -1, c3.shape[2], c3.shape[3])
-        _c3 = resize(_c3, size=c1.size()[2:],mode='bilinear',align_corners=False)
+        _c3 = self.linear_c3(c3).permute(0, 2, 1).reshape(
+            n, -1, c3.shape[2], c3.shape[3])
+        _c3 = resize(_c3, size=c1.size()[2:],
+                     mode='bilinear', align_corners=False)
 
-        _c2 = self.linear_c2(c2).permute(0,2,1).reshape(n, -1, c2.shape[2], c2.shape[3])
-        _c2 = resize(_c2, size=c1.size()[2:],mode='bilinear',align_corners=False)
+        _c2 = self.linear_c2(c2).permute(0, 2, 1).reshape(
+            n, -1, c2.shape[2], c2.shape[3])
+        _c2 = resize(_c2, size=c1.size()[2:],
+                     mode='bilinear', align_corners=False)
 
-        _c1 = self.linear_c1(c1).permute(0,2,1).reshape(n, -1, c1.shape[2], c1.shape[3])
+        _c1 = self.linear_c1(c1).permute(0, 2, 1).reshape(
+            n, -1, c1.shape[2], c1.shape[3])
 
         # Concatenate _c4 - c_1 along the right dimension and then apply the self.linear_fuse layer
-        _c = ... #TODO implement this line of code
+        _c = self.linear_fuse(torch.cat([_c4, _c3, _c2, _c1], dim=1))
+
         _c = self.linear_fuse_norm(_c)
         _c = self.linear_fuse_act(_c)
 

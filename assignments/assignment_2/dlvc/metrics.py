@@ -1,5 +1,7 @@
 from abc import ABCMeta, abstractmethod
+
 import torch
+
 
 class PerformanceMeasure(metaclass=ABCMeta):
     '''
@@ -31,13 +33,15 @@ class PerformanceMeasure(metaclass=ABCMeta):
 
         pass
 
+
 class SegMetrics(PerformanceMeasure):
     '''
     Mean Intersection over Union.
     '''
 
     def __init__(self, classes):
-        self.classes = classes
+        self.num_classes = classes if isinstance(
+            classes, int) else len(classes)
 
         self.reset()
 
@@ -47,7 +51,7 @@ class SegMetrics(PerformanceMeasure):
         '''
         # create an empty confusion-matrix (C × C) on CPU
         self._confmat = torch.zeros(
-            (self.classes, self.classes), dtype=torch.int64
+            (self.num_classes, self.num_classes), dtype=torch.int64
         )
 
     def update(
@@ -68,8 +72,8 @@ class SegMetrics(PerformanceMeasure):
         if target.ndim != 3:
             raise ValueError("target must be (b,h,w)")
         b, c, h, w = prediction.shape
-        if c != self.classes:
-            raise ValueError(f"expected {self.classes} classes, got {c}")
+        if c != self.num_classes:
+            raise ValueError(f"expected {self.num_classes} classes, got {c}")
         if target.shape != (b, h, w):
             raise ValueError("spatial dims of prediction/target mismatch")
 
@@ -80,13 +84,13 @@ class SegMetrics(PerformanceMeasure):
         tgt_lbl = target[mask].flatten()
 
         if pred_lbl.numel() == 0:
-            return  
+            return
 
+            # encode pairs
+        k = tgt_lbl * self.num_classes + pred_lbl
+        cm = torch.bincount(k, minlength=self.num_classes *
+                            self.num_classes).reshape(self.num_classes, self.num_classes)
 
-        k = tgt_lbl * self.classes + pred_lbl          # encode pairs
-        cm = torch.bincount(
-            k, minlength=self.classes * self.classes
-        ).reshape(self.classes, self.classes)
         self._confmat += cm.to(self._confmat.device)
 
     def __str__(self):
@@ -107,7 +111,7 @@ class SegMetrics(PerformanceMeasure):
         if self._confmat.sum() == 0:
             return 0.0
 
-        tp = torch.diag(self._confmat).float()
+        tp = torch.diag(self._confmat.to(torch.float32))
         fp = self._confmat.sum(0).float() - tp
         fn = self._confmat.sum(1).float() - tp
         denom = tp + fp + fn

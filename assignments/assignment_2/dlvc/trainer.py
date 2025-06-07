@@ -1,11 +1,15 @@
 import collections
-import torch
-from typing import  Tuple
 from abc import ABCMeta, abstractmethod
 from pathlib import Path
+from typing import Tuple
+
+import torch
 from tqdm import tqdm
 
-#from dlvc.wandb_logger import WandBLogger
+from .wandb_logger import WandBLogger
+
+# from dlvc.wandb_logger import WandBLogger
+
 
 class BaseTrainer(metaclass=ABCMeta):
     '''
@@ -36,7 +40,6 @@ class BaseTrainer(metaclass=ABCMeta):
 
         pass
 
-        
 
 class ImgSemSegTrainer(BaseTrainer):
     """
@@ -63,12 +66,12 @@ class ImgSemSegTrainer(BaseTrainer):
         super().__init__()
 
         # core objects
-        self.model         = model.to(device)
-        self.optimizer     = optimizer
-        self.loss_fn       = loss_fn
-        self.lr_scheduler  = lr_scheduler
-        self.train_metric  = train_metric
-        self.val_metric    = val_metric
+        self.model = model.to(device)
+        self.optimizer = optimizer
+        self.loss_fn = loss_fn
+        self.lr_scheduler = lr_scheduler
+        self.train_metric = train_metric
+        self.val_metric = val_metric
 
         # data
         self.train_loader = torch.utils.data.DataLoader(
@@ -87,12 +90,18 @@ class ImgSemSegTrainer(BaseTrainer):
         )
 
         # misc state
-        self.device            = device
-        self.num_epochs        = num_epochs
-        self.val_frequency     = val_frequency
+        self.device = device
+        self.num_epochs = num_epochs
+        self.val_frequency = val_frequency
         self.training_save_dir = training_save_dir
         self.training_save_dir.mkdir(parents=True, exist_ok=True)
-        self.best_val_miou     = 0.0
+        self.best_val_miou = 0.0
+        run_name = f"{model.__class__.__name__}_{self.num_epochs}ep_{train_data.__class__.__name__}"
+        self.logger = WandBLogger(
+            enabled=True,
+            model=model,
+            run_name=run_name
+        )
 
         '''
         Args and Kwargs:
@@ -126,11 +135,13 @@ class ImgSemSegTrainer(BaseTrainer):
 
         epoch_idx (int): Current epoch number
         """
+
         self.model.train()
         self.train_metric.reset()
         running_loss = 0.0
 
-        pbar = tqdm(self.train_loader, desc=f"Train  Epoch {epoch_idx}", leave=False)
+        pbar = tqdm(self.train_loader,
+                    desc=f"Train  Epoch {epoch_idx}", leave=False)
         for imgs, masks in pbar:
             imgs, masks = imgs.to(self.device), masks.to(self.device)
             if masks.ndim == 4 and masks.shape[1] == 1:   # (B,1,H,W) → (B,H,W)
@@ -152,12 +163,10 @@ class ImgSemSegTrainer(BaseTrainer):
             pbar.set_postfix(loss=loss.item(), mIoU=self.train_metric.mIoU())
 
         avg_loss = running_loss / len(self.train_loader)
-        miou     = self.train_metric.mIoU()
-        print(f"[Epoch {epoch_idx:03d}]  train loss: {avg_loss:.4f}  mIoU: {miou:.4f}")
+        miou = self.train_metric.mIoU()
+        print(
+            f"[Epoch {epoch_idx:03d}]  train loss: {avg_loss:.4f}  mIoU: {miou:.4f}")
         return avg_loss, miou
-
-
-
 
     def _val_epoch(self, epoch_idx: int) -> Tuple[float, float]:
         """
@@ -172,15 +181,16 @@ class ImgSemSegTrainer(BaseTrainer):
         running_loss = 0.0
 
         with torch.no_grad():
-            pbar = tqdm(self.val_loader, desc=f"Val    Epoch {epoch_idx}", leave=False)
+            pbar = tqdm(self.val_loader,
+                        desc=f"Val    Epoch {epoch_idx}", leave=False)
             for imgs, masks in pbar:
                 # move to device
-                imgs  = imgs.to(self.device, non_blocking=True)
+                imgs = imgs.to(self.device, non_blocking=True)
                 masks = masks.to(self.device, non_blocking=True)
 
-                if masks.ndim == 4 and masks.shape[1] == 1:   # (B,1,H,W) → (B,H,W)
+                # (B,1,H,W) → (B,H,W)
+                if masks.ndim == 4 and masks.shape[1] == 1:
                     masks = masks[:, 0]
-
 
                 logits = self.model(imgs)
                 if isinstance(logits, dict):
@@ -191,22 +201,20 @@ class ImgSemSegTrainer(BaseTrainer):
                 preds = logits.argmax(dim=1)
                 self.val_metric.update(logits.detach().cpu(), masks.cpu())
 
-
                 pbar.set_postfix(loss=loss.item(), mIoU=self.val_metric.mIoU())
 
         avg_loss = running_loss / len(self.val_loader)
-        miou     = self.val_metric.mIoU()
-        print(f"[Epoch {epoch_idx:03d}]  val   loss: {avg_loss:.4f}  mIoU: {miou:.4f}")
+        miou = self.val_metric.mIoU()
+        print(
+            f"[Epoch {epoch_idx:03d}]  val   loss: {avg_loss:.4f}  mIoU: {miou:.4f}")
         return avg_loss, miou
-
 
     def train(self) -> None:
         """
         Full training logic that loops over num_epochs and
         uses the _train_epoch and _val_epoch methods.
-        Save the model if mean IoU on validation data set is higher
-        than currently saved best mean IoU or if it is end of training. 
-        Depending on the val_frequency parameter, validation is not performed every epoch.
+        Logs training and validation metrics every epoch.
+        Only runs validation periodically based on val_frequency.
         """
         for epoch in range(1, self.num_epochs + 1):
             train_loss, train_miou = self._train_epoch(epoch)
@@ -214,30 +222,39 @@ class ImgSemSegTrainer(BaseTrainer):
             if self.lr_scheduler is not None:
                 self.lr_scheduler.step()
 
-            # periodic validation
+            # Default values for val loss/miou
+            val_loss = float('nan')
+            val_miou = float('nan')
+
+            # Run validation if needed
             if epoch % self.val_frequency == 0 or epoch == self.num_epochs:
                 val_loss, val_miou = self._val_epoch(epoch)
 
-                # save best mIoU model
                 if val_miou > self.best_val_miou:
                     self.best_val_miou = val_miou
                     best_path = self.training_save_dir / "best_model.pt"
                     torch.save(self.model.state_dict(), best_path)
                     print(f"  → Saved new best model (mIoU {val_miou:.4f})")
 
-            # always save last epoch weights
+            # Log everything (train + possibly val)
+            self.logger.log({
+                "epoch": epoch,
+                "train/loss": train_loss,
+                "train/mIoU": train_miou,
+                "val/loss": val_loss,
+                "val/mIoU": val_miou
+            })
+
+            # Always save last epoch
             if epoch == self.num_epochs:
                 torch.save(
                     self.model.state_dict(),
                     self.training_save_dir / "last_model.pt",
                 )
 
+        self.logger.finish()
+
     def dispose(self) -> None:
         """Free GPU memory, close loggers, etc."""
         del self.model
         torch.cuda.empty_cache()
-
-            
-            
-
-
